@@ -1,5 +1,6 @@
 import { Link } from 'expo-router';
-import { collection, onSnapshot, orderBy, query } from 'firebase/firestore';
+import { arrayRemove, arrayUnion, collection, doc, onSnapshot, orderBy, query, updateDoc } from 'firebase/firestore';
+import { Heart } from 'lucide-react-native';
 import React, { useEffect, useState } from 'react';
 import { ActivityIndicator, FlatList, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { auth, db } from '../src/config/firebaseConfig';
@@ -34,12 +35,32 @@ export default function FeedScreen() {
     });
   };
 
+  const toggleLike = async (postId: string, hasLiked: boolean) => {
+    const user = auth.currentUser;
+    if (!user) return;
+
+    const postRef = doc(db, "posts", postId);
+
+    try {
+      await updateDoc(postRef, {
+        likes: hasLiked ? arrayRemove(user.uid) : arrayUnion(user.uid),
+      });
+    } catch (error) {
+      console.error("Error toggling like: " + error);
+    }
+  }
+
   if (loading) return <ActivityIndicator style={{ flex: 1 }} />;
+
+  const postData = posts.map(post => ({
+    ...post,
+    hasLiked: post.likes?.includes(auth.currentUser?.uid || '') || false,
+  }));
 
   return (
     <View style={styles.container}>
       <FlatList
-        data={posts}
+        data={postData}
         keyExtractor={(item) => item.id!}
         renderItem={({ item }) => (
           <View style={styles.postCard}>
@@ -48,6 +69,12 @@ export default function FeedScreen() {
             <Text style={styles.timestamp}>
               {item.createdAt?.toDate().toLocaleString()}
             </Text>
+            <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+              <TouchableOpacity onPress={() => { toggleLike(item.id, item.hasLiked)}}>
+                <Heart size={24} color={item.hasLiked ? "red" : "#888"} fill={item.hasLiked ? "red" : "none"} />
+              </TouchableOpacity>
+              <Text style={styles.likes}>{item.likes?.length || 0}</Text>
+            </View>
           </View>
         )}
       />
@@ -79,6 +106,7 @@ const styles = StyleSheet.create({
   userName: { fontWeight: 'bold', fontSize: 16, marginBottom: 5 },
   postText: { fontSize: 15, color: '#333' },
   timestamp: { fontSize: 12, color: '#888', marginTop: 10 },
+  likes: { fontSize: 16, color: '#888', marginTop: 5 },
   fab: {
     position: 'absolute',
     right: 20,
